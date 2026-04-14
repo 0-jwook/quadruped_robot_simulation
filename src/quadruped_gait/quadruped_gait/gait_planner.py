@@ -55,8 +55,7 @@ class GaitPlanner:
             # IMU 기반 수평 유지 보정 (자세 제어)
             z_balance = -(leg_x * math.sin(pitch) * kp_pitch - leg_y * math.sin(roll) * kp_roll)
 
-            # 정지 자세는 발을 어깨 바로 아래에 배치 (front_x_offset은 보행 전용)
-            target_x = 0.0
+            target_x = self.front_x_offset if i < 2 else self.rear_x_offset
             target_y = self.kin.L1 if (i == 0 or i == 2) else -self.kin.L1
             target_z = -bh + z_balance
 
