@@ -200,6 +200,12 @@ class HardwareBridge(Node):
 
         try:
             self.ser.write(cmd.encode('ascii'))
+        except OSError:
+            self.get_logger().error('시리얼 포트 연결이 끊어졌습니다. 쓰기 실패.')
+            try:
+                self.ser.close()
+            except Exception:
+                pass
         except Exception as e:
             self.get_logger().error(f'시리얼 쓰기 오류: {e}')
 
@@ -226,6 +232,16 @@ class HardwareBridge(Node):
                 elif line.startswith('[ERROR]'):
                     self.get_logger().error(f'STM32: {line}')
 
+            except OSError:
+                # 포트 물리적 연결 끊김 → 포트 닫고 루프 종료
+                if not self._stop_event.is_set():
+                    self.get_logger().error('시리얼 포트 연결이 끊어졌습니다.')
+                if self.ser:
+                    try:
+                        self.ser.close()
+                    except Exception:
+                        pass
+                break
             except Exception as e:
                 if not self._stop_event.is_set():
                     self.get_logger().warn(f'시리얼 읽기 오류: {e}')
@@ -287,7 +303,10 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
