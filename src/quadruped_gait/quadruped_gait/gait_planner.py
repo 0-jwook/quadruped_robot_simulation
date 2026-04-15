@@ -26,8 +26,10 @@ class GaitPlanner:
         # Wave gait에서 앞발 1개가 Swing 중일 때 지지 삼각형(나머지 3발)의
         # 무게중심이 삼각형 안에 들어오려면 기하학적으로 ≥0.16m 이 필요.
         # (front_x_offset=0일 때 CoM이 지지 삼각형 경계선 위 → 윌리 발생)
-        self.front_x_offset = 0.0   # 앞발: 어깨보다 17cm 전방 (윌리 방지 핵심값)
-        self.rear_x_offset  = 0.0    # 뒷발: 어깨 바로 아래 (기본값 유지)
+        # ">" 자세: 발이 어깨보다 앞에 있어야 허벅지가 앞으로 기울어짐
+        # stand와 walk 모두 동일 값을 사용해 정지↔보행 전환 불연속 방지
+        self.front_x_offset = 0.10   # 앞발: 어깨보다 10cm 전방 (">" 자세 + 윌리 방지)
+        self.rear_x_offset  = 0.0    # 뒷발: 어깨 바로 아래
 
         # 고속 이동 시 IK 범위 초과 방지 (front_x_offset=0.17 기준 최대 도달 한계)
         self.max_stride = 0.22       # 보폭 상한 (m)
@@ -55,7 +57,7 @@ class GaitPlanner:
             # IMU 기반 수평 유지 보정 (자세 제어)
             z_balance = -(leg_x * math.sin(pitch) * kp_pitch - leg_y * math.sin(roll) * kp_roll)
 
-            target_x = 0.0
+            target_x = self.front_x_offset if i < 2 else self.rear_x_offset
             target_y = self.kin.L1 if (i == 0 or i == 2) else -self.kin.L1
             target_z = -bh + z_balance
 
