@@ -11,24 +11,33 @@ hardware_bridge.py
 시뮬레이션 노드(stm32_bridge, mcu_bridge, sim.launch.py)는 수정하지 않음.
 하드웨어 모드는 hardware.launch.py 로 기동.
 
-서보 각도 변환 기준 (README.md):
-  Home Position (기립, 다리 아래로 쭉 뻗은 상태):
-    FL/RL (왼쪽): shoulder=90°, thigh=0°,   calf=180°
-    FR/RR (오른쪽): shoulder=90°, thigh=180°, calf=0°
+실측 home (완전 펴진 상태, q1=q2=q3=0):
+    FL: shoulder=90°,  thigh=0°,   calf=180°
+    FR: shoulder=100°, thigh=165°, calf=0°
+    RL: shoulder=90°,  thigh=10°,  calf=180°
+    RR: shoulder=90°,  thigh=180°, calf=14.2°
 
-  IK 중립값 (body_height=0.27m, L1=0.08m, L2=L3=0.2m):
-    Q2_NEUTRAL = -0.8327 rad
-    Q3_NEUTRAL =  1.6597 rad
+  각도 증가 시 방향 (실측):
+    왼쪽: shoulder↑=어깨들림, thigh↑=뒤로뻗음, calf↑=뒤로뻗음
+    오른쪽: shoulder↑=안으로들어감, thigh↑=앞으로뻗음, calf↑=앞으로뻗음
 
-  왼쪽 다리 변환:
-    shoulder_deg = 90 + degrees(q1)
-    thigh_deg    = 0  + degrees(q2 - Q2_NEUTRAL)
-    calf_deg     = 180 - degrees(q3 - Q3_NEUTRAL)
+  IK 좌표계: q2>0=앞, q2<0=뒤, q3=0=완전펴짐, q3>0=무릎굽힘
 
-  오른쪽 다리 변환 (delta 부호 반전):
-    shoulder_deg = 90  - degrees(q1)
-    thigh_deg    = 180 - degrees(q2 - Q2_NEUTRAL)
-    calf_deg     = 0   + degrees(q3 - Q3_NEUTRAL)
+  왼쪽 다리 변환 (FL, RL):
+    shoulder = 90  + degrees(q1) + trim_s
+    thigh    = 0   - degrees(q2) + trim_t   ← q2↓(뒤) → servo↑ ✓
+    calf     = 180 - degrees(q3) + trim_c   ← q3=0 → 180°, q3↑(굽힘) → servo↓
+
+  오른쪽 다리 변환 (FR, RR):
+    shoulder = 90  + degrees(q1) + trim_s   ← q1↑(오른 안쪽) → servo↑ ✓
+    thigh    = 180 + degrees(q2) + trim_t   ← q2↑(앞) → servo↑ ✓
+    calf     = 0   + degrees(q3) + trim_c   ← q3=0 → 0°, q3↑(굽힘) → servo↑ ✓
+
+  트림값 (실측 - 이론):
+    FL: s+0,   t+0,   c+0
+    FR: s+10,  t-15,  c+0
+    RL: s+0,   t+10,  c+0
+    RR: s+0,   t+0,   c+14.2
 """
 
 import math
@@ -47,10 +56,16 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# IK 중립 각도 (gait_planner.py 의 Q2_NEUTRAL, Q3_NEUTRAL 과 동일 값)
+# 서보 트림값 (기계적 조립 오차 보정, 단위: degree)
+# 완전 펴진 상태(q1=q2=q3=0)에서 실측값 - 이론값
 # ---------------------------------------------------------------------------
-Q2_NEUTRAL = -0.8327  # rad  (허벅지, 기립 자세)
-Q3_NEUTRAL =  1.6597  # rad  (종아리, 기립 자세)
+SERVO_TRIMS = {
+    #        shoulder  thigh  calf
+    'FL': (   0.0,    0.0,   0.0),
+    'FR': (  10.0,  -15.0,   0.0),
+    'RL': (   0.0,   10.0,   0.0),
+    'RR': (   0.0,    0.0,  14.2),
+}
 
 
 def _clamp(val: float, lo: float = 0.0, hi: float = 180.0) -> float:
@@ -68,32 +83,32 @@ def _rpy_to_quaternion(roll: float, pitch: float, yaw: float):
     return x, y, z, w
 
 
-def ik_to_servo_deg(q1: float, q2: float, q3: float, is_right: bool):
+def ik_to_servo_deg(q1: float, q2: float, q3: float, leg: str):
     """
     IK 관절 각도(rad)를 하드웨어 서보 각도(deg, 0~180)로 변환.
 
     Parameters
     ----------
     q1 : shoulder(abduction) 각도 (rad)
-    q2 : thigh 각도 (rad)
-    q3 : calf 각도 (rad)
-    is_right : True → 오른쪽 다리(FR/RR), False → 왼쪽 다리(FL/RL)
+    q2 : thigh 각도 (rad),  q2>0=앞, q2<0=뒤
+    q3 : calf(knee) 각도 (rad),  q3=0=완전펴짐, q3>0=무릎굽힘
+    leg : 'FL' | 'FR' | 'RL' | 'RR'
 
     Returns
     -------
     (shoulder_deg, thigh_deg, calf_deg) : 각 0.0 ~ 180.0
     """
-    dq2 = math.degrees(q2 - Q2_NEUTRAL)
-    dq3 = math.degrees(q3 - Q3_NEUTRAL)
+    ts, tt, tc = SERVO_TRIMS[leg]
+    is_right = leg in ('FR', 'RR')
 
-    if not is_right:
-        shoulder = _clamp(90.0 + math.degrees(q1))
-        thigh    = _clamp(0.0  + dq2)
-        calf     = _clamp(180.0 - dq3)
-    else:
-        shoulder = _clamp(90.0  - math.degrees(q1))
-        thigh    = _clamp(180.0 - dq2)
-        calf     = _clamp(0.0   + dq3)
+    if not is_right:  # 왼쪽 (FL, RL)
+        shoulder = _clamp(90.0  + math.degrees(q1) + ts)
+        thigh    = _clamp(0.0   - math.degrees(q2) + tt)   # q2↓(뒤) → servo↑ ✓
+        calf     = _clamp(180.0 - math.degrees(q3) + tc)   # q3=0 → 180°
+    else:             # 오른쪽 (FR, RR)
+        shoulder = _clamp(90.0  + math.degrees(q1) + ts)   # q1↑(안쪽) → servo↑ ✓
+        thigh    = _clamp(180.0 + math.degrees(q2) + tt)   # q2↑(앞) → servo↑ ✓
+        calf     = _clamp(0.0   + math.degrees(q3) + tc)   # q3=0 → 0°
 
     return shoulder, thigh, calf
 
@@ -185,11 +200,11 @@ class HardwareBridge(Node):
             self.get_logger().warn(f'관절 수 부족: {len(pos)}/12')
             return
 
-        # 각 다리별 변환 (is_right: 1=FR, 3=RR → True)
-        fl_s, fl_t, fl_c = ik_to_servo_deg(pos[0],  pos[1],  pos[2],  is_right=False)
-        fr_s, fr_t, fr_c = ik_to_servo_deg(pos[3],  pos[4],  pos[5],  is_right=True)
-        rl_s, rl_t, rl_c = ik_to_servo_deg(pos[6],  pos[7],  pos[8],  is_right=False)
-        rr_s, rr_t, rr_c = ik_to_servo_deg(pos[9],  pos[10], pos[11], is_right=True)
+        # 각 다리별 변환 (트림값 포함)
+        fl_s, fl_t, fl_c = ik_to_servo_deg(pos[0],  pos[1],  pos[2],  'FL')
+        fr_s, fr_t, fr_c = ik_to_servo_deg(pos[3],  pos[4],  pos[5],  'FR')
+        rl_s, rl_t, rl_c = ik_to_servo_deg(pos[6],  pos[7],  pos[8],  'RL')
+        rr_s, rr_t, rr_c = ik_to_servo_deg(pos[9],  pos[10], pos[11], 'RR')
 
         cmd = (
             f'A:{fl_s:.1f},{fl_t:.1f},{fl_c:.1f},'
@@ -197,6 +212,12 @@ class HardwareBridge(Node):
             f'{rl_s:.1f},{rl_t:.1f},{rl_c:.1f},'
             f'{rr_s:.1f},{rr_t:.1f},{rr_c:.1f}\n'
         )
+
+        # 5초마다 전송 중인 명령 로그 출력 (디버그용)
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        if not hasattr(self, '_last_log_t') or now_sec - self._last_log_t > 5.0:
+            self._last_log_t = now_sec
+            self.get_logger().info(f'전송 중: {cmd.strip()}')
 
         try:
             self.ser.write(cmd.encode('ascii'))

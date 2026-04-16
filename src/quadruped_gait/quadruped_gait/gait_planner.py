@@ -10,8 +10,8 @@ class GaitPlanner:
         self.kin = kinematics
         
         # --- [물리 파라미터] ---
-        self.body_height = 0.20   # 기본 자세: 무릎 꺾인 ">" 형태 (0.27=다리 쫙 펴짐)
-        self.step_height = 0.06   # body_height 낮아진 만큼 step_height도 조정
+        self.body_height = 0.18   # 기본 자세: 무릎 꺾인 ">" 형태 (max reach=0.25m)
+        self.step_height = 0.04   # 짧은 다리에 맞춘 step_height
         self.period = 1.75          
         
         # --- [Wave Gait 핵심 설정] ---
@@ -31,13 +31,14 @@ class GaitPlanner:
         self.front_x_offset = 0.10   # 앞발: 어깨보다 10cm 전방 (">" 자세 + 윌리 방지)
         self.rear_x_offset  = 0.0    # 뒷발: 어깨 바로 아래
 
-        # 고속 이동 시 IK 범위 초과 방지 (front_x_offset=0.17 기준 최대 도달 한계)
-        self.max_stride = 0.22       # 보폭 상한 (m)
+        # L2+L3=0.25m, h=0.18m → 수평 최대 도달 = sqrt(0.25²-0.18²) = 0.173m
+        # front anchor 0.10 기준 앞쪽 여유 = 0.073m → 총 보폭 상한 = 0.12m
+        self.max_stride = 0.06       # 편도 보폭 상한 (m), 총 0.12m
         
-        # 중립 자세(기립) 기준값: body_height=0.27, L2=L3=0.2, L1=0.08 기준으로 계산된 값
+        # 중립 자세(기립) 기준값: body_height=0.20m, L1=0.07, L2=0.12, L3=0.13 기준으로 계산된 값
         # 하드웨어 서보 각도 변환의 기준점으로도 사용됨
-        self.Q2_NEUTRAL = -0.8327  # rad
-        self.Q3_NEUTRAL =  1.6597  # rad
+        self.Q2_NEUTRAL = -0.6741  # rad
+        self.Q3_NEUTRAL =  1.2882  # rad
         self.last_angles = [[0.0, self.Q2_NEUTRAL, self.Q3_NEUTRAL] for _ in range(4)]
 
     def get_stand_posture(self, roll=0.0, pitch=0.0, body_height=None):

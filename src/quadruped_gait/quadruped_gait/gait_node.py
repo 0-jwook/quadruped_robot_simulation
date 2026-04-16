@@ -35,7 +35,7 @@ class GaitNode(Node):
         super().__init__('gait_node')
         
         # 하드웨어 파라미터 초기화
-        self.kin = LegKinematics(L1=0.08, L2=0.2, L3=0.2)
+        self.kin = LegKinematics(L1=0.07, L2=0.12, L3=0.13)
         self.planner = GaitPlanner(self.kin)
         
         # ROS2 통신 설정
@@ -79,7 +79,7 @@ class GaitNode(Node):
 
     def height_callback(self, msg):
         """몸체 높이 명령 수신 (teleop_key의 t/b 키)"""
-        self.target_body_height = max(0.15, min(0.35, float(msg.data)))
+        self.target_body_height = max(0.12, min(0.22, float(msg.data)))
 
     def timer_callback(self):
         """메인 제어 루프"""

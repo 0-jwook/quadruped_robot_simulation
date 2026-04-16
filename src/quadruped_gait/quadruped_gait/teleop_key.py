@@ -76,9 +76,9 @@ class TeleopKey(Node):
         self.declare_parameter('linear_speed',  0.3)
         self.declare_parameter('angular_speed', 0.8)
         self.declare_parameter('height_step',   0.02)
-        self.declare_parameter('height_min',    0.15)
-        self.declare_parameter('height_max',    0.35)
-        self.declare_parameter('default_height', 0.20)
+        self.declare_parameter('height_min',    0.12)
+        self.declare_parameter('height_max',    0.22)
+        self.declare_parameter('default_height', 0.18)
 
         self._lin  = self.get_parameter('linear_speed').value
         self._ang  = self.get_parameter('angular_speed').value
