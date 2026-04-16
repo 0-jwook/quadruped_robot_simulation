@@ -28,7 +28,7 @@ class GaitPlanner:
         # (front_x_offset=0일 때 CoM이 지지 삼각형 경계선 위 → 윌리 발생)
         # ">" 자세: 발이 어깨보다 앞에 있어야 허벅지가 앞으로 기울어짐
         # stand와 walk 모두 동일 값을 사용해 정지↔보행 전환 불연속 방지
-        self.front_x_offset = 0.10   # 앞발: 어깨보다 10cm 전방 (">" 자세 + 윌리 방지)
+        self.front_x_offset = 0.0   # 앞발: 어깨보다 10cm 전방 (">" 자세 + 윌리 방지)
         self.rear_x_offset  = 0.0    # 뒷발: 어깨 바로 아래
 
         # L2+L3=0.25m, h=0.18m → 수평 최대 도달 = sqrt(0.25²-0.18²) = 0.173m
